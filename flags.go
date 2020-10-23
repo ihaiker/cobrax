@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type FlagTemplateFun func(flagName, value string) string
+type FlagTemplateFun func(flagType, flagName, value string) string
 
 func Flags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, tempFn ...FlagTemplateFun) error {
 	if main == nil || reflect.ValueOf(main).IsZero() || reflect.ValueOf(main).IsNil() {
@@ -39,13 +39,13 @@ func tag(field reflect.StructField, names ...string) string {
 	return ""
 }
 
-func templateValue(flagName, value string, tempFn ...FlagTemplateFun) string {
+func templateValue(flagType, flagName, value string, tempFn ...FlagTemplateFun) string {
 	if value == "" || !strings.Contains(value, "{{") {
 		return value
 	}
 	if len(tempFn) > 0 {
 		for _, fun := range tempFn {
-			if newV := fun(flagName, value); newV != value {
+			if newV := fun(flagType, flagName, value); newV != value && newV != "" {
 				return newV
 			}
 		}
@@ -106,11 +106,11 @@ func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, te
 		if env == "" && envPrefix != "" {
 			env = envPrefix + "_" + envName(flagName)
 		}
-		help := templateValue(flagName, tag(fieldType, "help", "h"), tempFn...)
+		help := templateValue("help", flagName, tag(fieldType, "help", "h"), tempFn...)
 		if env != "" {
 			help += " (env: " + env + ") "
 		}
-		defValue := templateValue(flagName, tag(fieldType, "def"), tempFn...)
+		defValue := templateValue("def", flagName, tag(fieldType, "def"), tempFn...)
 
 		switch fieldVal.Interface().(type) {
 		case time.Duration:

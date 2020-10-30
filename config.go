@@ -43,7 +43,7 @@ func ConfigFrom(cmd *cobra.Command, config interface{}, envName string, unmarsha
 		}
 		for i := len(paths) - 1; i >= 0; i-- {
 			bs, err := ioutil.ReadFile(paths[i])
-			if flag.Changed {
+			if flag.Changed && err != nil {
 				return err
 			}
 			if err != nil {

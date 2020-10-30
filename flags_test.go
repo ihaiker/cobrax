@@ -87,25 +87,30 @@ func TestCmd(t *testing.T) {
 }
 
 func TestT1(t *testing.T) {
-	if err := t1.Help(); err != nil {
-		t.Fatal(err)
-	}
-	os.Args = []string{
-		"test",
-		//"-f", "/data/user/",
-		"t1",
-		//"-h",
-		//"--t1.name", "命令行",
-		"--t1.user-info.name", "命令行设置",
-		//"--t1.attrs", "name=1",
-	}
 	os.Setenv("USER_NAME", "环境变量配置")
 	os.Setenv("TEST_T1_NAME", "环境变量")
 	os.Setenv("TEST_T1_DEBUG", "true")
 	os.Setenv("TEST_T1_ADDRESS", "test,123,1")
 	os.Setenv("TEST_T1_ATTRS", "test=123,b=a")
+	os.Setenv("TEST_CONF", "/etc/config.json")
 
-	cobrax.Stdout = os.Stdout
+	os.Args = []string{
+		"test",
+		//"-f", "/data/user/",
+		"t1",
+		//"-h",
+		"--t1.name", "命令行",
+		//"--t1.user-info.name", "命令行设置",
+		//"--t1.attrs", "name=1",
+	}
+
+	if err := cobrax.ConfigJson(cmd, config, "TEST_CONF", "./config.json", "/etc/config.json"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmd.Help(); err != nil {
+		t.Fatal(err)
+	}
 
 	/*if err := cobrax.Config(cmd, func(cmd *cobra.Command) error {
 		if cmd.Name() == t1.Name() {
@@ -115,10 +120,6 @@ func TestT1(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}*/
-
-	if err := cobrax.ConfigJson(cmd, config, "./config.json", "/etc/config.json"); err != nil {
-		t.Fatal(err)
-	}
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)

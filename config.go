@@ -13,8 +13,6 @@ func Config(cmd *cobra.Command, fn func(*cobra.Command) error) error {
 	r, _, err := cmd.Find(os.Args[1:])
 	if err != nil {
 		return err
-	} else if !r.IsAvailableCommand() { //is help
-		return nil
 	} else if err := r.ParseFlags(os.Args[1:]); err != nil {
 		if strings.Contains(err.Error(), "help requested") {
 			return nil

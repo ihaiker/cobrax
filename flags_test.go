@@ -92,7 +92,7 @@ func TestT1(t *testing.T) {
 	os.Setenv("TEST_T1_DEBUG", "true")
 	os.Setenv("TEST_T1_ADDRESS", "test,123,1")
 	os.Setenv("TEST_T1_ATTRS", "test=123,b=a")
-	os.Setenv("TEST_CONF", "/etc/config.json")
+	//os.Setenv("TEST_CONF", "/etc/config.json")
 
 	os.Args = []string{
 		"test",
@@ -100,8 +100,12 @@ func TestT1(t *testing.T) {
 		"t1",
 		//"-h",
 		"--t1.name", "命令行",
+		"--t1.desc=n描述",
 		//"--t1.user-info.name", "命令行设置",
+		"--t1.user-info.address=infoadd1",
 		//"--t1.attrs", "name=1",
+		"--t1.address=a1",
+		"--t1.address=a2",
 	}
 
 	if err := cobrax.ConfigJson(cmd, config, "TEST_CONF", "./config.json", "/etc/config.json"); err != nil {

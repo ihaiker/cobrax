@@ -6,23 +6,18 @@ import (
 	"github.com/spf13/cobra"
 	"io/ioutil"
 	"os"
-	"strings"
 )
 
 func Config(cmd *cobra.Command, fn func(*cobra.Command) error) error {
 	r, _, err := cmd.Find(os.Args[1:])
 	if err != nil {
 		return err
-	} else if err := r.ParseFlags(os.Args[1:]); err != nil {
-		if strings.Contains(err.Error(), "help requested") {
-			return nil
-		}
-		return err
 	}
-	if err := fn(r); err != nil {
-		return err
+	//ParseFlags和Find都是只能运行一次，所所以必须不能这样
+	if help, _ := r.PersistentFlags().GetBool("help"); help {
+		return nil
 	}
-	return r.ParseFlags(os.Args[1:])
+	return fn(r)
 }
 
 //根据paths查找相对应的配置文件，优先级从低到高
@@ -34,6 +29,7 @@ func ConfigFrom(cmd *cobra.Command, config interface{}, envName string, unmarsha
 	cmd.PersistentFlags().StringSliceVarP(&paths, "conf", "f", paths, help)
 
 	return Config(cmd, func(c *cobra.Command) error {
+		fmt.Println("---------------")
 		if err := envget(cmd, "conf", envName)(); err != nil {
 			return err
 		}

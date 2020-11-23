@@ -29,7 +29,6 @@ func ConfigFrom(cmd *cobra.Command, config interface{}, envName string, unmarsha
 	cmd.PersistentFlags().StringSliceVarP(&paths, "conf", "f", paths, help)
 
 	return Config(cmd, func(c *cobra.Command) error {
-		fmt.Println("---------------")
 		if err := envget(cmd, "conf", envName)(); err != nil {
 			return err
 		}

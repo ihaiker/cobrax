@@ -1,13 +1,16 @@
 package cobrax
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
 func TestName(t *testing.T) {
-	name := camel2Case("FlagName.Age", '-')
-	t.Log(name)
+	name := camel2Case("FlagNameAge", '-')
+	assert.Equal(t, name, "flag-name-age")
 }
 
 func TestEnv(t *testing.T) {
-	name := envName("FlagName.Age")
-	t.Log(name)
+	name := envName("FlagNameAge")
+	assert.Equal(t, name, "FLAG_NAME_AGE")
 }

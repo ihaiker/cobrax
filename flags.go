@@ -3,6 +3,7 @@ package cobrax
 import (
 	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"net"
 	"os"
 	"reflect"
@@ -12,8 +13,25 @@ import (
 )
 
 type FlagTemplateFun func(flagType, flagName, value string) string
+type FlagsGet func(*cobra.Command) *pflag.FlagSet
+
+var (
+	GetFlags FlagsGet = func(command *cobra.Command) *pflag.FlagSet {
+		return command.Flags()
+	}
+	PersistentFlags FlagsGet = func(command *cobra.Command) *pflag.FlagSet {
+		return command.PersistentFlags()
+	}
+	LocalFlags FlagsGet = func(command *cobra.Command) *pflag.FlagSet {
+		return command.LocalFlags()
+	}
+)
 
 func Flags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, tempFn ...FlagTemplateFun) error {
+	return FlagsWith(cmd, GetFlags, main, prefix, envPrefix, tempFn...)
+}
+
+func FlagsWith(cmd *cobra.Command, fn FlagsGet, main interface{}, prefix, envPrefix string, tempFn ...FlagTemplateFun) error {
 	if main == nil || reflect.ValueOf(main).IsZero() || reflect.ValueOf(main).IsNil() {
 		return fmt.Errorf("main is zero Value")
 	}
@@ -27,7 +45,7 @@ func Flags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, tempF
 	if mainTyp.Kind() != reflect.Struct {
 		return fmt.Errorf("value must be pointer to struct, but is pointer to %s", typ.Kind().String())
 	}
-	return setFlags(cmd, main, prefix, envPrefix, tempFn...)
+	return setFlags(cmd, fn(cmd), main, prefix, envPrefix, tempFn...)
 }
 
 func tag(field reflect.StructField, names ...string) string {
@@ -53,22 +71,22 @@ func templateValue(flagType, flagName, value string, tempFn ...FlagTemplateFun) 
 	return value
 }
 
-func envget(cmd *cobra.Command, name, env string) func() error {
+func getValue(flagSet *pflag.FlagSet, name, env string) func() error {
 	return func() error {
-		flag := cmd.PersistentFlags().Lookup(name)
+		flag := flagSet.Lookup(name)
 		if flag.Changed {
 			return nil
 		}
 		value, has := os.LookupEnv(env)
 		if has {
-			return cmd.PersistentFlags().Set(name, value)
+			return flagSet.Set(name, value)
 		}
 		return nil
 	}
 }
 
-func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, tempFn ...FlagTemplateFun) error {
-	flags /* flag.FlagSet*/ := cmd.PersistentFlags()
+func setFlags(cmd *cobra.Command, flags *pflag.FlagSet, main interface{}, prefix, envPrefix string, tempFn ...FlagTemplateFun) error {
+	//flags /* flag.FlagSet*/ := cmd.PersistentFlags()
 
 	mainVal := reflect.ValueOf(main).Elem()
 	mainTyp := mainVal.Type()
@@ -103,14 +121,26 @@ func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, te
 
 		shorthand := tag(fieldType, "short")
 		env := tag(fieldType, "env")
-		if env == "" && envPrefix != "" {
-			env = envPrefix + "_" + envName(flagName)
+		if env == "-" {
+			env = ""
+		} else if env == "" {
+			env = envName(flagName)
+		}
+		if envPrefix != "" {
+			env = envPrefix + "_" + env
 		}
 		help := templateValue("help", flagName, tag(fieldType, "help", "h"), tempFn...)
 		if env != "" {
 			help += " (env: " + env + ") "
 		}
 		defValue := templateValue("def", flagName, tag(fieldType, "def"), tempFn...)
+
+		if fieldVal.Type().Kind() == reflect.Ptr {
+			if fieldVal.IsNil() {
+				fieldVal.Set(reflect.New(fieldType.Type.Elem()))
+			}
+			fieldVal = fieldVal.Elem()
+		}
 
 		switch fieldVal.Interface().(type) {
 		case time.Duration:
@@ -130,6 +160,7 @@ func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, te
 				value = net.ParseIP(defValue)
 			}
 			flags.IPVarP(p, flagName, shorthand, value, help)
+			goto ENV
 		case []net.IP:
 			p := fieldVal.Addr().Interface().(*[]net.IP)
 			flags.IPSliceVarP(p, flagName, shorthand, *p, help)
@@ -148,7 +179,7 @@ func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, te
 		}
 
 		// now check basic kinds
-		switch fieldType.Type.Kind() {
+		switch fieldVal.Kind() {
 		case reflect.String:
 			p := fieldVal.Addr().Interface().(*string)
 			value := *p
@@ -232,14 +263,14 @@ func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, te
 				}
 				flags.StringSliceVarP(p, flagName, shorthand, val, help)
 			default:
-				return fmt.Errorf("encountered unsupported slice type/kind: %#v at %s", fieldVal, prefix)
+				return fmt.Errorf("encountered unsupported slice type/kind: %s", fieldType.Type.Name())
 			}
 		case reflect.Struct:
 			newPrefix := flagName
 			if strings.HasSuffix(flagName, "!embed") {
 				newPrefix = prefix
 			}
-			err := setFlags(cmd, fieldVal.Addr().Interface(), newPrefix, envPrefix, tempFn...)
+			err := setFlags(cmd, flags, fieldVal.Addr().Interface(), newPrefix, envPrefix, tempFn...)
 			if err != nil {
 				return err
 			}
@@ -247,7 +278,7 @@ func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, te
 		case reflect.Map:
 			p, match := fieldVal.Addr().Interface().(*map[string]string)
 			if !match {
-				return fmt.Errorf("encountered unsupported field type/kind: %#v at %s", fieldVal, prefix)
+				return fmt.Errorf("encountered unsupported fieldType type/kind: %v", fieldType.Type.String())
 			}
 			val := *p
 			if defValue != "" {
@@ -263,11 +294,11 @@ func setFlags(cmd *cobra.Command, main interface{}, prefix, envPrefix string, te
 			}
 			flags.StringToStringVarP(p, flagName, shorthand, val, help)
 		default:
-			return fmt.Errorf("encountered unsupported field type/kind: %#v at %s", fieldVal, prefix)
+			return fmt.Errorf("encountered unsupported  type/kind: %s", fieldType.Type.String())
 		}
 	ENV:
 		if env != "" {
-			fns = append(fns, envget(cmd, flagName, env))
+			fns = append(fns, getValue(flags, flagName, env))
 		}
 	}
 

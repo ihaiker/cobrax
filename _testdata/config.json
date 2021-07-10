@@ -1,0 +1,6 @@
+{
+	"version": "v1.21.2",
+	"tls": {
+		"enable": true
+	}
+}
